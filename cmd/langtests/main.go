@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-mp map[string]string = make(map[string]string)
+var mp map[string]string = make(map[string]string)
 
 func main() {
 	v, ok := mp["hello"]

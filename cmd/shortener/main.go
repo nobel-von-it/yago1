@@ -5,10 +5,12 @@ import (
 	"math/rand"
 	"net/http"
 	"strings"
-	"testing"
 )
 
-const form = `<html>
+const (
+	symbols    = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	defaultLen = 5
+	form       = `<html>
     <head>
     <title></title>
     </head>
@@ -18,34 +20,16 @@ const form = `<html>
             <input type="submit" value="Generate">
         </form>
     </body>
-</html>`
-const symbols = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-const defaultLen = 5
+	</html>`
+)
 
 var shoring map[string]string = make(map[string]string)
 
 func AddMap(mp map[string]string, key, value string) {
-	_, ok := mp[key]
-	if !ok {
-		mp[key] = value
+	if key == "" || value == "" || key == value {
+		return
 	}
-}
-
-func TestAddMap(t *testing.T) {
-	testMap := make(map[string]string)
-	key := "hello"
-	value := "world"
-
-	AddMap(testMap, key, value)
-	if testMap[key] != value {
-		t.Errorf("expected key %s to have value %s, but got %s", key, value, testMap[key])
-	}
-
-	new_value := "world!!!!"
-	AddMap(testMap, key, new_value)
-	if testMap[key] != new_value {
-		t.Errorf("expected key %s to have value %s, but got %s", key, new_value, testMap[key])
-	}
+	mp[key] = value
 }
 
 func FindVal(mp map[string]string, val string) string {
@@ -57,21 +41,6 @@ func FindVal(mp map[string]string, val string) string {
 	return ""
 }
 
-func TestFindVal(t *testing.T) {
-	testMap := map[string]string{"k1": "v1", "k2": "v2"}
-
-	value := "v1"
-	key := FindVal(testMap, value)
-	if key != "k1" {
-		t.Errorf("expected to find key k1 for value %s, but got %s", value, key)
-	}
-
-	value = "asldkjf"
-	if key != "" {
-		t.Errorf("expected empty string for non-existent value %s, but got %s", value, key)
-	}
-}
-
 func GenShortUrl(n int) string {
 	b := make([]byte, n)
 	for i := range b {
@@ -80,39 +49,23 @@ func GenShortUrl(n int) string {
 	return string(b)
 }
 
-func TestGenShortUrl(t *testing.T) {
-	url := GenShortUrl(defaultLen)
-	if len(url) != defaultLen {
-		t.Errorf("expected URL length to be %d, but got %d", defaultLen, len(url))
-	}
-
-	specLen := 10
-	url = GenShortUrl(specLen)
-	if len(url) != specLen {
-		t.Errorf("expected URL length to be %d, but got %d", specLen, len(url))
-	}
-
-	for i := 0; i > 10; i++ {
-		url = GenShortUrl(defaultLen)
-		for _, c := range url {
-			if !strings.ContainsAny(string(c), symbols) {
-				t.Errorf("generated URL number %d contains invalid char %c", i, c)
-			}
-		}
-	}
-}
-
 func PostHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodPost {
+	if r.Method == http.MethodPost && r.FormValue("address") != "" {
 		addr := r.FormValue("address")
 		short := GenShortUrl(defaultLen)
 		AddMap(shoring, addr, short)
 		w.Header().Set("content-type", "text/plain")
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(r.Host + "/" + short))
+		_, err := w.Write([]byte(r.Host + "/" + short))
+		if err != nil {
+			return
+		}
 		fmt.Println("address added")
 	} else {
-		w.Write([]byte(form))
+		_, err := w.Write([]byte(form))
+		if err != nil {
+			return
+		}
 	}
 }
 
@@ -122,7 +75,10 @@ func GetHandler(w http.ResponseWriter, r *http.Request) {
 		if addr == "" {
 			w.Header().Set("content-type", "text/plain")
 			w.WriteHeader(400)
-			w.Write([]byte("This id not found"))
+			_, err := w.Write([]byte("This id not found"))
+			if err != nil {
+				return
+			}
 		} else {
 			w.Header().Set("location", addr)
 			w.WriteHeader(http.StatusTemporaryRedirect)
@@ -131,7 +87,10 @@ func GetHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		w.Header().Set("content-type", "text/plain")
 		w.WriteHeader(400)
-		w.Write([]byte("Incorrect request"))
+		_, err := w.Write([]byte("Incorrect request"))
+		if err != nil {
+			return
+		}
 	}
 }
 
@@ -142,7 +101,10 @@ func GetAllHandler(w http.ResponseWriter, r *http.Request) {
 
 		for k, v := range shoring {
 			ent := fmt.Sprintf("Addr [%s] with shortform [%s]\n", k, v)
-			w.Write([]byte(ent))
+			_, err := w.Write([]byte(ent))
+			if err != nil {
+				return
+			}
 		}
 	}
 

@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"net/http"
 	"strings"
+	"testing"
 )
 
 const form = `<html>
@@ -30,6 +31,23 @@ func AddMap(mp map[string]string, key, value string) {
 	}
 }
 
+func TestAddMap(t *testing.T) {
+	testMap := make(map[string]string)
+	key := "hello"
+	value := "world"
+
+	AddMap(testMap, key, value)
+	if testMap[key] != value {
+		t.Errorf("expected key %s to have value %s, but got %s", key, value, testMap[key])
+	}
+
+	new_value := "world!!!!"
+	AddMap(testMap, key, new_value)
+	if testMap[key] != new_value {
+		t.Errorf("expected key %s to have value %s, but got %s", key, new_value, testMap[key])
+	}
+}
+
 func FindVal(mp map[string]string, val string) string {
 	for k, v := range mp {
 		if val == v {
@@ -39,12 +57,49 @@ func FindVal(mp map[string]string, val string) string {
 	return ""
 }
 
+func TestFindVal(t *testing.T) {
+	testMap := map[string]string{"k1": "v1", "k2": "v2"}
+
+	value := "v1"
+	key := FindVal(testMap, value)
+	if key != "k1" {
+		t.Errorf("expected to find key k1 for value %s, but got %s", value, key)
+	}
+
+	value = "asldkjf"
+	if key != "" {
+		t.Errorf("expected empty string for non-existent value %s, but got %s", value, key)
+	}
+}
+
 func GenShortUrl(n int) string {
 	b := make([]byte, n)
 	for i := range b {
 		b[i] = symbols[rand.Intn(len(symbols))]
 	}
 	return string(b)
+}
+
+func TestGenShortUrl(t *testing.T) {
+	url := GenShortUrl(defaultLen)
+	if len(url) != defaultLen {
+		t.Errorf("expected URL length to be %d, but got %d", defaultLen, len(url))
+	}
+
+	specLen := 10
+	url = GenShortUrl(specLen)
+	if len(url) != specLen {
+		t.Errorf("expected URL length to be %d, but got %d", specLen, len(url))
+	}
+
+	for i := 0; i > 10; i++ {
+		url = GenShortUrl(defaultLen)
+		for _, c := range url {
+			if !strings.ContainsAny(string(c), symbols) {
+				t.Errorf("generated URL number %d contains invalid char %c", i, c)
+			}
+		}
+	}
 }
 
 func PostHandler(w http.ResponseWriter, r *http.Request) {

@@ -2,19 +2,26 @@ package main
 
 import (
 	"fmt"
+	"github.com/go-resty/resty/v2"
 )
 
-var mp map[string]string = make(map[string]string)
+type User struct {
+	ID    int    `json:"id"`
+	Name  string `json:"username"`
+	Email string `json:"email"`
+}
 
 func main() {
-	v, ok := mp["hello"]
-	if !ok {
-		mp["hello"] = "world"
-	} else {
-		fmt.Print(v)
+	var users []User
+	url := "https://jsonplaceholder.typicode.com/users"
+
+	cli := resty.New()
+	_, err := cli.R().SetResult(&users).Get(url)
+	if err != nil {
+		panic(err)
 	}
 
-	for k, v := range mp {
-		fmt.Println(k, v)
+	for _, v := range users {
+		fmt.Printf("User {id: %d, name: %s, email: %s}\r\n", v.ID, v.Name, v.Email)
 	}
 }

@@ -30,7 +30,7 @@ func ParseArgs() *Config {
 
 	flag.Parse()
 
-	if config.Same {
+	if config.Same && config.ServerAddress != config.BaseUrl {
 		if config.ServerAddress != defServAddr {
 			config.BaseUrl = config.ServerAddress
 		} else if config.BaseUrl != defBaseUrl {

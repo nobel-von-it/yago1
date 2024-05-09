@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/go-chi/chi/v5"
 	"io"
 	"log"
 	"net/http"
@@ -39,22 +40,44 @@ func carsHandle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func carHandle(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
-	if id == "" {
-		http.Error(w, "id is missed", http.StatusBadRequest)
-		return
+//func carHandle(w http.ResponseWriter, r *http.Request) {
+//	if _, err := w.Write([]byte(findCar(chi.URLParam(r, "id")))); err != nil {
+//		return
+//	}
+//}
+
+func brandHandle(w http.ResponseWriter, r *http.Request) {
+	list := make([]string, 0)
+	brand := strings.ToLower(chi.URLParam(r, "brand"))
+	for _, c := range cars {
+		if strings.Split(strings.ToLower(c), " ")[0] == brand {
+			list = append(list, c)
+		}
 	}
-	if _, err := w.Write([]byte(findCar(id))); err != nil {
-		http.Error(w, "error", http.StatusBadRequest)
-		return
+	io.WriteString(w, strings.Join(list, ", "))
+}
+
+func modelHandle(w http.ResponseWriter, r *http.Request) {
+	car := strings.ToLower(chi.URLParam(r, "brand") + " " + chi.URLParam(r, "model"))
+	for _, c := range cars {
+		if strings.ToLower(c) == car {
+			io.WriteString(w, c)
+			return
+		}
 	}
+	http.Error(w, "unknown model: "+car, http.StatusNotFound)
 }
 
 func main() {
-	s := http.NewServeMux()
-	s.HandleFunc("/cars", carsHandle)
-	s.HandleFunc("/car", carHandle)
+	s := chi.NewRouter()
+
+	s.Route("/cars", func(s chi.Router) {
+		s.Get("/", carsHandle)
+		s.Route("/{brand}", func(s chi.Router) {
+			s.Get("/", brandHandle)
+			s.Get("/{model}", modelHandle)
+		})
+	})
 
 	log.Fatalln(http.ListenAndServe(":8080", s))
 }

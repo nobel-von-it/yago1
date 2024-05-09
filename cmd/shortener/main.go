@@ -3,11 +3,13 @@ package main
 import (
 	"fmt"
 	"github.com/go-chi/chi/v5"
-	"log"
+	"go.uber.org/zap"
 	"math/rand"
 	"nerd/yago1/cmd/shortener/config"
+	"nerd/yago1/cmd/shortener/logging"
 	"net/http"
 	"strings"
+	"time"
 )
 
 const (
@@ -72,7 +74,7 @@ func PostFormHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return
 		}
-		fmt.Println("address added:", addr, "->", url)
+		sugar.Infoln("From:", addr, "To:", url)
 	} else if r.Method == http.MethodGet {
 		w.Write([]byte(form))
 	} else {
@@ -86,22 +88,16 @@ func GetHandler(w http.ResponseWriter, r *http.Request) {
 		if addr == "" {
 			w.Header().Set("content-type", "text/plain")
 			w.WriteHeader(400)
-			_, err := w.Write([]byte("This id not found"))
-			if err != nil {
-				return
-			}
+			w.Write([]byte("This id not found"))
 		} else {
 			w.Header().Set("location", addr)
 			w.WriteHeader(http.StatusTemporaryRedirect)
-			fmt.Println("got address")
+			sugar.Infow("Redirecting...")
 		}
 	} else {
 		w.Header().Set("content-type", "text/plain")
 		w.WriteHeader(400)
-		_, err := w.Write([]byte("Incorrect request"))
-		if err != nil {
-			return
-		}
+		w.Write([]byte("Incorrect request"))
 	}
 }
 
@@ -118,14 +114,61 @@ func GetAllHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+var sugar zap.SugaredLogger
+
+func LoggerMiddleware(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		rd := &logging.ResData{
+			Size:   0,
+			Status: 0,
+		}
+		lw := logging.LogResponseWriter{
+			ResponseWriter: w,
+			ResData:        rd,
+		}
+
+		h.ServeHTTP(&lw, r)
+
+		end := time.Since(start)
+
+		sugar.Infoln(
+			"uri", r.RequestURI,
+			"method", r.Method,
+			"status", rd.Status,
+			"duration", end,
+			"size", rd.Size,
+		)
+	})
+}
+
 func main() {
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		panic(err)
+	}
+	defer func(logger *zap.Logger) {
+		err := logger.Sync()
+		if err != nil {
+			panic(err)
+		}
+	}(logger)
+
+	sugar = *logger.Sugar()
+
 	r := chi.NewRouter()
 
-	r.HandleFunc("/", PostFormHandler)
-	r.Get("/{id}", GetHandler)
-	r.Get("/getall", GetAllHandler)
+	r.Handle("/", LoggerMiddleware(http.HandlerFunc(PostFormHandler)))
+	r.Handle("/{id}", LoggerMiddleware(http.HandlerFunc(GetHandler)))
+	r.Handle("/getall", LoggerMiddleware(http.HandlerFunc(GetAllHandler)))
 
-	log.Println("cfg.ServerAddress =", cfg.ServerAddress)
-	log.Println("cfg.BaseUrl =", cfg.BaseUrl)
-	log.Fatalln(http.ListenAndServe(cfg.ServerAddress, r))
+	sugar.Infow("Starting server",
+		"Server Address", cfg.ServerAddress,
+		"Base URL", cfg.BaseUrl,
+		"Is same", cfg.Same,
+	)
+	if err := http.ListenAndServe(cfg.ServerAddress, r); err != nil {
+		sugar.Fatalw(err.Error(), "event", "start server")
+	}
 }

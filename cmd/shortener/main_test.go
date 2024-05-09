@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"nerd/yago1/cmd/shortener/config"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -81,6 +82,8 @@ func TestGenShortUrl(t *testing.T) {
 }
 
 func TestPostHandler(t *testing.T) {
+	_ = config.ParseArgs()
+
 	type args struct {
 		method string
 		addr   string
@@ -106,12 +109,12 @@ func TestPostHandler(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.args.method, "/", strings.NewReader(fmt.Sprintf("address=%s", tt.args.addr)))
+			req := httptest.NewRequest(tt.args.method, "/", strings.NewReader(fmt.Sprintf("url=%s", tt.args.addr)))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 			rw := httptest.NewRecorder()
 
-			PostHandler(rw, req)
+			PostFormHandler(rw, req)
 
 			assert.Equal(t, tt.want.code, rw.Code)
 		})

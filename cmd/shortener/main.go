@@ -2,7 +2,10 @@ package main
 
 import (
 	"fmt"
+	"github.com/go-chi/chi/v5"
+	"log"
 	"math/rand"
+	"nerd/yago1/cmd/shortener/config"
 	"net/http"
 	"strings"
 )
@@ -16,14 +19,15 @@ const (
     </head>
     <body>
         <form action="/" method="post">
-            <label>Address</label><input type="text" name="address">
+            <label>Address</label><input type="text" name="url">
             <input type="submit" value="Generate">
         </form>
     </body>
 	</html>`
 )
 
-var shoring map[string]string = make(map[string]string)
+var shoring = make(map[string]string)
+var cfg = config.ParseArgs()
 
 func AddMap(mp map[string]string, key, value string) {
 	if key == "" || value == "" || key == value {
@@ -49,23 +53,30 @@ func GenShortUrl(n int) string {
 	return string(b)
 }
 
-func PostHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodPost && r.FormValue("address") != "" {
-		addr := r.FormValue("address")
+func PostFormHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		url := r.FormValue("url")
+		if url == "" {
+			http.Error(w, "url is empty", http.StatusBadRequest)
+			return
+		}
 		short := GenShortUrl(defaultLen)
-		AddMap(shoring, addr, short)
+		addr := cfg.BaseUrl + "/" + short
+
+		AddMap(shoring, url, short)
+
 		w.Header().Set("content-type", "text/plain")
 		w.WriteHeader(http.StatusCreated)
-		_, err := w.Write([]byte(r.Host + "/" + short))
+
+		_, err := w.Write([]byte(addr))
 		if err != nil {
 			return
 		}
-		fmt.Println("address added")
+		fmt.Println("address added:", addr, "->", url)
+	} else if r.Method == http.MethodGet {
+		w.Write([]byte(form))
 	} else {
-		_, err := w.Write([]byte(form))
-		if err != nil {
-			return
-		}
+		http.Error(w, "shiiit", http.StatusBadRequest)
 	}
 }
 
@@ -95,30 +106,26 @@ func GetHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetAllHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		w.Header().Set("content-type", "text/plain")
-		w.WriteHeader(http.StatusOK)
+	w.Header().Set("content-type", "text/plain")
+	w.WriteHeader(http.StatusOK)
 
-		for k, v := range shoring {
-			ent := fmt.Sprintf("Addr [%s] with shortform [%s]\n", k, v)
-			_, err := w.Write([]byte(ent))
-			if err != nil {
-				return
-			}
+	for k, v := range shoring {
+		ent := fmt.Sprintf("Addr [%s] with shortform [%s]\n", k, v)
+		_, err := w.Write([]byte(ent))
+		if err != nil {
+			return
 		}
 	}
-
 }
 
 func main() {
-	s := http.NewServeMux()
+	r := chi.NewRouter()
 
-	s.HandleFunc("/", PostHandler)
-	s.HandleFunc("/getall", GetAllHandler)
-	s.HandleFunc("/{id}", GetHandler)
+	r.HandleFunc("/", PostFormHandler)
+	r.Get("/{id}", GetHandler)
+	r.Get("/getall", GetAllHandler)
 
-	err := http.ListenAndServe(":8080", s)
-	if err != nil {
-		panic(err)
-	}
+	log.Println("cfg.ServerAddress =", cfg.ServerAddress)
+	log.Println("cfg.BaseUrl =", cfg.BaseUrl)
+	log.Fatalln(http.ListenAndServe(cfg.ServerAddress, r))
 }

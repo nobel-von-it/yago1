@@ -1,105 +1,73 @@
 package main
 
 import (
+	"bytes"
+	"encoding/xml"
+	"errors"
 	"fmt"
-	"go.uber.org/zap"
-	"net/http"
-	"time"
+	"io"
 )
 
-var sugar zap.SugaredLogger
+const MockXMLDocument = `
+<?xml version="1.0" encoding="UTF-8"?>
+<storage-report version="1.0" exported-on="2021-01-31" location-id="001">
+<item barcode="000000000001">
+  <quantity>100</quantity>
+</item>
+<item barcode="000000000002">
+  <quantity>500</quantity>
+</item>
+</storage-report>
+`
 
-type (
-	// берём структуру для хранения сведений об ответе
-	responseData struct {
-		status int
-		size   int
-	}
-
-	// добавляем реализацию http.ResponseWriter
-	loggingResponseWriter struct {
-		http.ResponseWriter // встраиваем оригинальный http.ResponseWriter
-		responseData        *responseData
-	}
-)
-
-func (r *loggingResponseWriter) Write(b []byte) (int, error) {
-	// записываем ответ, используя оригинальный http.ResponseWriter
-	size, err := r.ResponseWriter.Write(b)
-	r.responseData.size += size // захватываем размер
-	return size, err
+// Item — XML-представление складской единицы.
+type Item struct {
+	XMLName  xml.Name `xml:"item"`
+	Barcode  string   `xml:"barcode,attr"`
+	Quantity int64    `xml:"quantity"`
 }
 
-func (r *loggingResponseWriter) WriteHeader(statusCode int) {
-	// записываем код статуса, используя оригинальный http.ResponseWriter
-	r.ResponseWriter.WriteHeader(statusCode)
-	r.responseData.status = statusCode // захватываем код статуса
+// ProcessStorageReportStream обрабатывает XML-отчёт по складу.
+func ProcessStorageReportStream(stream io.Reader) error {
+	decoder := xml.NewDecoder(stream)
+	for {
+		// получаем следующий XML-токен
+		xmlToken, err := decoder.Token()
+		if err != nil {
+			// проверка на конец файла
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			// ошибка чтения
+			return fmt.Errorf("reading XML token: %w", err)
+		}
+
+		switch xmlElement := xmlToken.(type) {
+		case xml.StartElement:
+			// идентифицируем XML-элемент по имени
+			if xmlElement.Name.Local == "item" {
+				var item Item
+				if err := decoder.DecodeElement(&item, &xmlElement); err != nil {
+					return fmt.Errorf("XML decode to (%T): %w", item, err)
+				}
+				HandleReportItem(item)
+			}
+		default:
+		}
+	}
+
+	return nil
+}
+
+// HandleReportItem обрабатывает складскую единицу из отчёта.
+func HandleReportItem(item Item) {
+	fmt.Printf("Обработка складской позиции (%s):\n", item.Barcode)
+	fmt.Printf("  Количество [шт]: %d\n", item.Quantity)
 }
 
 func main() {
-	// создаём предустановленный регистратор zap
-	logger, err := zap.NewDevelopment()
-	if err != nil {
-		// вызываем панику, если ошибка
+	reader := bytes.NewReader([]byte(MockXMLDocument))
+	if err := ProcessStorageReportStream(reader); err != nil {
 		panic(err)
 	}
-	defer func(logger *zap.Logger) {
-		err := logger.Sync()
-		if err != nil {
-			panic(err)
-		}
-	}(logger)
-
-	// делаем регистратор SugaredLogger
-	sugar = *logger.Sugar()
-
-	http.Handle("/ping", WithLogging(pingHandler()))
-
-	addr := "127.0.0.1:8080"
-	// записываем в лог, что сервер запускается
-	sugar.Infow(
-		"Starting server",
-		"addr", addr,
-	)
-	if err := http.ListenAndServe(addr, nil); err != nil {
-		// записываем в лог ошибку, если сервер не запустился
-		sugar.Fatalw(err.Error(), "event", "start server")
-	}
-}
-
-// хендлер для /ping
-func pingHandler() http.Handler {
-	fn := func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprintf(w, "pong\n")
-	}
-	return http.HandlerFunc(fn)
-}
-
-func WithLogging(h http.Handler) http.Handler {
-	logFn := func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-
-		rd := &responseData{
-			size:   0,
-			status: 0,
-		}
-		lw := loggingResponseWriter{
-			ResponseWriter: w,
-			responseData:   rd,
-		}
-
-		h.ServeHTTP(&lw, r)
-
-		end := time.Since(start)
-
-		sugar.Infoln(
-			"uri", r.RequestURI,
-			"method", r.Method,
-			"status", rd.status,
-			"duration", end,
-			"size", rd.size,
-		)
-	}
-	return http.HandlerFunc(logFn)
 }

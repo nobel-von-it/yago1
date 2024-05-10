@@ -138,7 +138,6 @@ func LoggerMiddleware(h http.Handler) http.Handler {
 			"method", r.Method,
 			"status", rd.Status,
 			"duration", end,
-			"size", rd.Size,
 		)
 	})
 }

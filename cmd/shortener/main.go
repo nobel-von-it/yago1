@@ -1,15 +1,17 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
-	"github.com/go-chi/chi/v5"
-	"go.uber.org/zap"
 	"math/rand"
-	"nerd/yago1/cmd/shortener/config"
-	"nerd/yago1/cmd/shortener/logging"
+	"nerd/shortener/config"
+	"nerd/shortener/logging"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 )
 
 const (
@@ -28,8 +30,10 @@ const (
 	</html>`
 )
 
-var shoring = make(map[string]string)
-var cfg = config.ParseArgs()
+var (
+	shoring = make(map[string]string)
+	cfg     = config.ParseArgs()
+)
 
 func AddMap(mp map[string]string, key, value string) {
 	if key == "" || value == "" || key == value {
@@ -55,6 +59,10 @@ func GenShortUrl(n int) string {
 	return string(b)
 }
 
+func ToAddr(str string) string {
+	return cfg.BaseUrl + "/" + str
+}
+
 func PostFormHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		url := r.FormValue("url")
@@ -63,7 +71,7 @@ func PostFormHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		short := GenShortUrl(defaultLen)
-		addr := cfg.BaseUrl + "/" + short
+		addr := ToAddr(short)
 
 		AddMap(shoring, url, short)
 
@@ -80,6 +88,49 @@ func PostFormHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		http.Error(w, "shiiit", http.StatusBadRequest)
 	}
+}
+
+type RequestData struct {
+	Url string `json:url`
+}
+
+type ResponseData struct {
+	Result string `json:result`
+}
+
+func JsonPostFormHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Need post method", http.StatusBadRequest)
+		return
+	}
+
+	var req RequestData
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, "Parse json error", http.StatusBadRequest)
+		return
+	}
+
+	sugar.Infow("Got json:", "url", req.Url)
+
+	if req.Url == "" {
+		http.Error(w, "Url is empty", http.StatusBadRequest)
+		return
+	}
+	short := GenShortUrl(defaultLen)
+	addr := ToAddr(short)
+
+	AddMap(shoring, req.Url, short)
+
+	w.Header().Set("content-type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+
+	res := ResponseData{
+		Result: addr,
+	}
+
+	json.NewEncoder(w).Encode(&res)
+	sugar.Infoln("From:", addr, "To:", req.Url)
 }
 
 func GetHandler(w http.ResponseWriter, r *http.Request) {
@@ -161,6 +212,7 @@ func main() {
 	r.Handle("/", LoggerMiddleware(http.HandlerFunc(PostFormHandler)))
 	r.Handle("/{id}", LoggerMiddleware(http.HandlerFunc(GetHandler)))
 	r.Handle("/getall", LoggerMiddleware(http.HandlerFunc(GetAllHandler)))
+	r.Handle("/api/shorten", LoggerMiddleware(http.HandlerFunc(JsonPostFormHandler)))
 
 	sugar.Infow("Starting server",
 		"Server Address", cfg.ServerAddress,

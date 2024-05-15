@@ -11,12 +11,9 @@ type Config struct {
 	Same          bool
 }
 
-var config = new(Config)
+var config Config
 
-var defServAddr = "localhost:8080"
-var defBaseUrl = "localhost:8080"
-
-func ParseArgs() *Config {
+func init() {
 	if serverAddress := os.Getenv("SERVER_ADDRESS"); serverAddress != "" {
 		defServAddr = serverAddress
 	}
@@ -28,6 +25,13 @@ func ParseArgs() *Config {
 	flag.StringVar(&config.BaseUrl, "p", defBaseUrl, "user-input value for pre short url")
 	flag.BoolVar(&config.Same, "s", false, "are base url and server address same")
 
+}
+
+var defServAddr = "localhost:8080"
+var defBaseUrl = "localhost:8080"
+
+func ParseArgs() *Config {
+
 	flag.Parse()
 
 	if config.Same && config.ServerAddress != config.BaseUrl {
@@ -38,5 +42,10 @@ func ParseArgs() *Config {
 		}
 	}
 
-	return config
+	return &config
+}
+
+func DefaultValues() {
+	_ = flag.Set("a", defServAddr)
+	_ = flag.Set("p", defBaseUrl)
 }

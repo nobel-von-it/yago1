@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	"nerd/yago1/cmd/shortener/config"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -61,8 +60,7 @@ func TestGenShortUrl(t *testing.T) {
 		args args
 		want int
 	}{
-		{name: "normal length 0", args: args{n: defaultLen}, want: defaultLen},
-		{name: "normal length 1", args: args{n: defaultLen}, want: defaultLen},
+		{name: "normal length 0", args: args{n: defaultLen}, want: defaultLen}, {name: "normal length 1", args: args{n: defaultLen}, want: defaultLen},
 		{name: "normal length 2", args: args{n: defaultLen}, want: defaultLen},
 		{name: "normal length 3", args: args{n: defaultLen}, want: defaultLen},
 		{name: "normal length 4", args: args{n: defaultLen}, want: defaultLen},
@@ -82,8 +80,6 @@ func TestGenShortUrl(t *testing.T) {
 }
 
 func TestPostHandler(t *testing.T) {
-	_ = config.ParseArgs()
-
 	type args struct {
 		method string
 		addr   string
@@ -164,6 +160,26 @@ func TestGetHandler(t *testing.T) {
 			assert.Equal(t, tt.want.code, rw.Code)
 
 			AddMap(shoring, tt.args.addr.key, tt.args.addr.value)
+		})
+	}
+}
+
+func TestJsonPostFormHandler(t *testing.T) {
+	type args struct {
+		method string
+		key string
+		value string
+	}
+	tests := []struct {
+		name string
+		args args
+		want int
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			
 		})
 	}
 }

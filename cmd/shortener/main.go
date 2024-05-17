@@ -1,8 +1,10 @@
 package main
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand"
 	"nerd/shortener/config"
 	"nerd/shortener/logging"
@@ -64,11 +66,14 @@ func ToAddr(str string) string {
 }
 
 func PostFormHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodPost {
-		url := r.FormValue("url")
+	url := r.URL.Query().Get("url")
+	if r.Method == http.MethodPost || url != "" {
 		if url == "" {
-			http.Error(w, "url is empty", http.StatusBadRequest)
-			return
+			url = r.FormValue("url")
+			if url == "" {
+				http.Error(w, "url is empty", http.StatusBadRequest)
+				return
+			}
 		}
 		short := GenShortUrl(defaultLen)
 		addr := ToAddr(short)
@@ -84,18 +89,18 @@ func PostFormHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		sugar.Infoln("From:", addr, "To:", url)
 	} else if r.Method == http.MethodGet {
-		w.Write([]byte(form))
+		_, _ = w.Write([]byte(form))
 	} else {
 		http.Error(w, "shiiit", http.StatusBadRequest)
 	}
 }
 
 type RequestData struct {
-	Url string `json:url`
+	Url string `json:"url"`
 }
 
 type ResponseData struct {
-	Result string `json:result`
+	Result string `json:"result"`
 }
 
 func JsonPostFormHandler(w http.ResponseWriter, r *http.Request) {
@@ -129,7 +134,10 @@ func JsonPostFormHandler(w http.ResponseWriter, r *http.Request) {
 		Result: addr,
 	}
 
-	json.NewEncoder(w).Encode(&res)
+	if err := json.NewEncoder(w).Encode(&res); err != nil {
+		http.Error(w, "json encode error", http.StatusInternalServerError)
+		return
+	}
 	sugar.Infoln("From:", addr, "To:", req.Url)
 }
 
@@ -139,7 +147,7 @@ func GetHandler(w http.ResponseWriter, r *http.Request) {
 		if addr == "" {
 			w.Header().Set("content-type", "text/plain")
 			w.WriteHeader(400)
-			w.Write([]byte("This id not found"))
+			_, _ = w.Write([]byte("This id not found"))
 		} else {
 			w.Header().Set("location", addr)
 			w.WriteHeader(http.StatusTemporaryRedirect)
@@ -148,7 +156,7 @@ func GetHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		w.Header().Set("content-type", "text/plain")
 		w.WriteHeader(400)
-		w.Write([]byte("Incorrect request"))
+		_, _ = w.Write([]byte("Incorrect request"))
 	}
 }
 
@@ -193,6 +201,57 @@ func LoggerMiddleware(h http.Handler) http.Handler {
 	})
 }
 
+type GzipWriter struct {
+	http.ResponseWriter
+	Writer io.Writer
+}
+
+func (gw GzipWriter) Write(b []byte) (int, error) {
+	return gw.Writer.Write(b)
+}
+
+func GzipMiddleware(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.Header.Get("Content-Encoding"), "gzip") {
+			gz, err := gzip.NewReader(r.Body)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+			defer func(gz *gzip.Reader) {
+				err := gz.Close()
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+				}
+			}(gz)
+			r.Body = gz
+
+			h.ServeHTTP(w, r)
+			return
+		}
+		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			gz := gzip.NewWriter(w)
+			defer func(gz *gzip.Writer) {
+				err := gz.Close()
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+				}
+			}(gz)
+
+			w.Header().Set("Content-Encoding", "gzip")
+			w.Header().Del("Content-Length")
+
+			gzw := GzipWriter{
+				ResponseWriter: w,
+				Writer:         gz,
+			}
+
+			h.ServeHTTP(gzw, r)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	logger, err := zap.NewDevelopment()
 	if err != nil {
@@ -209,10 +268,10 @@ func main() {
 
 	r := chi.NewRouter()
 
-	r.Handle("/", LoggerMiddleware(http.HandlerFunc(PostFormHandler)))
-	r.Handle("/{id}", LoggerMiddleware(http.HandlerFunc(GetHandler)))
-	r.Handle("/getall", LoggerMiddleware(http.HandlerFunc(GetAllHandler)))
-	r.Handle("/api/shorten", LoggerMiddleware(http.HandlerFunc(JsonPostFormHandler)))
+	r.Handle("/", LoggerMiddleware(GzipMiddleware(http.HandlerFunc(PostFormHandler))))
+	r.Handle("/{id}", LoggerMiddleware(GzipMiddleware(http.HandlerFunc(GetHandler))))
+	r.Handle("/getall", LoggerMiddleware(GzipMiddleware(http.HandlerFunc(GetAllHandler))))
+	r.Handle("/api/shorten", LoggerMiddleware(GzipMiddleware(http.HandlerFunc(JsonPostFormHandler))))
 
 	sugar.Infow("Starting server",
 		"Server Address", cfg.ServerAddress,

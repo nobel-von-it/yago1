@@ -79,6 +79,19 @@ func TestGenShortUrl(t *testing.T) {
 	}
 }
 
+func TestInfo(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{name: "1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			Info()
+		})
+	}
+}
+
 func TestPostHandler(t *testing.T) {
 	type args struct {
 		method string
@@ -100,12 +113,17 @@ func TestPostHandler(t *testing.T) {
 		{
 			name: "try to get form page",
 			args: args{method: http.MethodGet, addr: ""},
-			want: want{code: http.StatusOK},
+			want: want{code: http.StatusMethodNotAllowed},
+		},
+		{
+			name: "try another method",
+			args: args{method: http.MethodConnect, addr: ""},
+			want: want{code: http.StatusMethodNotAllowed},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.args.method, "/", strings.NewReader(fmt.Sprintf("url=%s", tt.args.addr)))
+			req := httptest.NewRequest(tt.args.method, "/api/shorten", strings.NewReader(fmt.Sprintf("url=%s", tt.args.addr)))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 			rw := httptest.NewRecorder()
@@ -166,20 +184,44 @@ func TestGetHandler(t *testing.T) {
 
 func TestJsonPostFormHandler(t *testing.T) {
 	type args struct {
-		method string
-		key string
-		value string
+		method     string
+		pseudoJson string
 	}
 	tests := []struct {
 		name string
 		args args
 		want int
 	}{
-		// TODO: Add test cases.
+		{
+			name: "test add address with json",
+			args: args{method: http.MethodPost, pseudoJson: `{"url": "https://www.youtube.com"}`},
+			want: http.StatusCreated,
+		},
+		{
+			name: "test add address with json method get",
+			args: args{method: http.MethodGet, pseudoJson: `{"url": "https://www.youtube.com"}`},
+			want: http.StatusMethodNotAllowed,
+		},
+		{
+			name: "test add address with json but without json",
+			args: args{method: http.MethodPost, pseudoJson: "lskdjfslkdjfsldkfj"},
+			want: http.StatusBadRequest,
+		},
+		{
+			name: "test add address with json but url is empty",
+			args: args{method: http.MethodPost, pseudoJson: `"url": ""`},
+			want: http.StatusBadRequest,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			
+			req := httptest.NewRequest(tt.args.method, "/api/shorten", strings.NewReader(tt.args.pseudoJson))
+			rw := httptest.NewRecorder()
+
+			JsonPostFormHandler(rw, req)
+
+			assert.Equal(t, tt.want, rw.Code)
+			assert.Equal(t, len(shoring), 1)
 		})
 	}
 }

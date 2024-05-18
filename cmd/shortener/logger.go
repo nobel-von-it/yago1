@@ -1,4 +1,4 @@
-package logging
+package main
 
 import "net/http"
 

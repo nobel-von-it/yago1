@@ -6,14 +6,11 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
-	"nerd/shortener/config"
-	"nerd/shortener/logging"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"go.uber.org/zap"
 )
 
 const (
@@ -24,7 +21,7 @@ const (
     <title></title>
     </head>
     <body>
-        <form action="/" method="post">
+        <form action="/api/shorten" method="post">
             <label>Address</label><input type="text" name="url">
             <input type="submit" value="Generate">
         </form>
@@ -34,7 +31,7 @@ const (
 
 var (
 	shoring = make(map[string]string)
-	cfg     = config.ParseArgs()
+	cfg     = ParseArgs()
 )
 
 func AddMap(mp map[string]string, key, value string) {
@@ -65,35 +62,68 @@ func ToAddr(str string) string {
 	return cfg.BaseUrl + "/" + str
 }
 
+func Info() {
+	sugar.Info("hello", "world")
+}
+
 func PostFormHandler(w http.ResponseWriter, r *http.Request) {
-	url := r.URL.Query().Get("url")
-	if r.Method == http.MethodPost || url != "" {
-		if url == "" {
-			url = r.FormValue("url")
-			if url == "" {
-				http.Error(w, "url is empty", http.StatusBadRequest)
-				return
-			}
-		}
-		short := GenShortUrl(defaultLen)
-		addr := ToAddr(short)
-
-		AddMap(shoring, url, short)
-
-		w.Header().Set("content-type", "text/plain")
-		w.WriteHeader(http.StatusCreated)
-
-		_, err := w.Write([]byte(addr))
-		if err != nil {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	url := chi.URLParam(r, "url")
+	if len(url) == 0 {
+		url = r.FormValue("url")
+		if len(url) == 0 {
+			http.Error(w, "url required", http.StatusBadRequest)
 			return
 		}
-		sugar.Infoln("From:", addr, "To:", url)
-	} else if r.Method == http.MethodGet {
-		_, _ = w.Write([]byte(form))
-	} else {
-		http.Error(w, "shiiit", http.StatusBadRequest)
 	}
+	short := GenShortUrl(defaultLen)
+	addr := ToAddr(short)
+	AddMap(shoring, url, short)
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusCreated)
+
+	sugar.Infoln("From:", addr, "To:", url)
 }
+
+func GetForm(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(form))
+}
+
+//func PostFormHandler(w http.ResponseWriter, r *http.Request) {
+//	url := r.URL.Query().Get("url")
+//	if r.Method == http.MethodPost || url != "" {
+//		if url == "" {
+//			url = r.FormValue("url")
+//			if url == "" {
+//				http.Error(w, "url is empty", http.StatusBadRequest)
+//				return
+//			}
+//		}
+//		short := GenShortUrl(defaultLen)
+//		addr := ToAddr(short)
+//
+//		AddMap(shoring, url, short)
+//
+//		w.Header().Set("content-type", "text/plain")
+//		w.WriteHeader(http.StatusCreated)
+//
+//		_, err := w.Write([]byte(addr))
+//		if err != nil {
+//			return
+//		}
+//		sugar.Infoln("From:", addr, "To:", url)
+//	} else if r.Method == http.MethodGet {
+//		_, _ = w.Write([]byte(form))
+//	} else {
+//		http.Error(w, "shiiit", http.StatusBadRequest)
+//	}
+//}
 
 type RequestData struct {
 	Url string `json:"url"`
@@ -105,7 +135,7 @@ type ResponseData struct {
 
 func JsonPostFormHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Need post method", http.StatusBadRequest)
+		http.Error(w, "Need post method", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -173,17 +203,15 @@ func GetAllHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-var sugar zap.SugaredLogger
-
 func LoggerMiddleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
-		rd := &logging.ResData{
+		rd := &ResData{
 			Size:   0,
 			Status: 0,
 		}
-		lw := logging.LogResponseWriter{
+		lw := LogResponseWriter{
 			ResponseWriter: w,
 			ResData:        rd,
 		}
@@ -253,25 +281,13 @@ func GzipMiddleware(h http.Handler) http.Handler {
 }
 
 func main() {
-	logger, err := zap.NewDevelopment()
-	if err != nil {
-		panic(err)
-	}
-	defer func(logger *zap.Logger) {
-		err := logger.Sync()
-		if err != nil {
-			panic(err)
-		}
-	}(logger)
-
-	sugar = *logger.Sugar()
-
 	r := chi.NewRouter()
 
-	r.Handle("/", LoggerMiddleware(GzipMiddleware(http.HandlerFunc(PostFormHandler))))
+	r.Handle("/", LoggerMiddleware(GzipMiddleware(http.HandlerFunc(GetForm))))
 	r.Handle("/{id}", LoggerMiddleware(GzipMiddleware(http.HandlerFunc(GetHandler))))
 	r.Handle("/getall", LoggerMiddleware(GzipMiddleware(http.HandlerFunc(GetAllHandler))))
-	r.Handle("/api/shorten", LoggerMiddleware(GzipMiddleware(http.HandlerFunc(JsonPostFormHandler))))
+	r.Handle("/api/shorten", LoggerMiddleware(GzipMiddleware(http.HandlerFunc(PostFormHandler))))
+	r.Handle("/api/shorten/json", LoggerMiddleware(GzipMiddleware(http.HandlerFunc(JsonPostFormHandler))))
 
 	sugar.Infow("Starting server",
 		"Server Address", cfg.ServerAddress,

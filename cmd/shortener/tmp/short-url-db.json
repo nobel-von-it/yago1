@@ -1,9 +1,9 @@
 {
-  "events": [
+  "Events": [
     {
-      "uuid": "DrMmm",
-      "short_url": "localhost:8080/DrMmm",
-      "original_url": "http://youtube.com"
+      "Uuid": "kRneC",
+      "ShortUrl": "localhost:8080/kRneC",
+      "OriginalUrl": "http://youtube.com"
     }
   ]
 }

@@ -1,12 +1,13 @@
 package main
 
 import (
-	"github.com/go-chi/chi/v5"
 	"nerd/shortener/flags"
 	"nerd/shortener/handlers"
 	"nerd/shortener/middlewares"
 	"nerd/shortener/storage"
 	"net/http"
+
+	"github.com/go-chi/chi/v5"
 )
 
 var (
@@ -18,6 +19,7 @@ var (
 func main() {
 	r := chi.NewRouter()
 	r.Handle("/", middlewares.LoggerMiddleware(middlewares.GzipMiddleware(http.HandlerFunc(handlers.GetForm))))
+	r.Handle("/ping", middlewares.LoggerMiddleware(middlewares.GzipMiddleware(http.HandlerFunc(handlers.GetPing))))
 	r.Handle("/{id}", middlewares.LoggerMiddleware(middlewares.GzipMiddleware(http.HandlerFunc(handlers.GetHandler))))
 	r.Handle("/getall", middlewares.LoggerMiddleware(middlewares.GzipMiddleware(http.HandlerFunc(handlers.GetAllHandler))))
 	r.Handle("/api/shorten", middlewares.LoggerMiddleware(middlewares.GzipMiddleware(http.HandlerFunc(handlers.PostFormHandler))))

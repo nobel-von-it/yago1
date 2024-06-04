@@ -7,7 +7,7 @@ import (
 )
 
 func DirExists(path string) error {
-	if !strings.Contains(path, "/") {
+	if !strings.Contains(path, "/") || len(strings.Split(path, "/")) != 2 {
 		return errors.New("invalid path: " + path)
 	}
 	_, err := os.Stat(path)

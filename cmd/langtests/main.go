@@ -1,19 +1,23 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
-	"encoding/gob"
-	"encoding/json"
-	"fmt"
+	"context"
+	"database/sql"
+	"time"
+
+	_ "modernc.org/sqlite"
 )
 
 func main() {
-	// data содержит данные в формате gob
+	db, err := sql.Open("sqlite", "test.db")
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
 
-	// напишите код, который декодирует data в массив строк
-	// 1. создайте буфер `bytes.NewBuffer(data)` для передачи в декодер
-	// 2. создайте декодер `dec := gob.NewDecoder(buf)`
-	// 3. определите `make([]string, 0)` для получения декодированного слайса
-	// 4. декодируйте данные используя функцию `dec.Decode`
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err = db.PingContext(ctx); err != nil {
+		panic(err)
+	}
 }

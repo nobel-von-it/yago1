@@ -1,8 +1,9 @@
 package utils
 
 import (
-	"go.uber.org/zap"
 	"math/rand"
+
+	"go.uber.org/zap"
 )
 
 const symbols = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -19,6 +20,7 @@ func ToAddr(baseUrl, str string) string {
 	return baseUrl + "/" + str
 }
 
+// test sugar is work
 func Info(sugar *zap.SugaredLogger) {
 	sugar.Info("hello", "world")
 }

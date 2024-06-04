@@ -14,7 +14,7 @@ func main() {
 
 	jsonStr := []byte(`{"url":"http://youtube.com"}`)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonStr))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/storage")
 
 	client := &http.Client{}
 	resp, err := client.Do(req)

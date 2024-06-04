@@ -2,17 +2,19 @@ package flags
 
 import (
 	"flag"
-	"go.uber.org/zap"
 	"nerd/shortener/files"
 	"nerd/shortener/storage"
 	"os"
 	"strings"
+
+	"go.uber.org/zap"
 )
 
 type Config struct {
 	ServerAddress string
 	BaseUrl       string
 	StoragePath   string
+	DataBase      string
 	Same          bool
 }
 
@@ -20,25 +22,29 @@ var (
 	defServAddr    = "localhost:8080"
 	defBaseUrl     = "localhost:8080"
 	defStoragePath = "tmp/short-url-db.json"
+	defDataBase    = "host=localhost port=5432 user=nerd password=123 dbname=shortener sslmode=disable"
 	config         Config
 	sugar          *zap.SugaredLogger
 	events         = storage.GetEvents()
 )
 
-func init() {
-	if serverAddress := os.Getenv("SERVER_ADDRESS"); serverAddress != "" {
-		defServAddr = serverAddress
+func checkenv(env, def string) string {
+	if got := os.Getenv(env); got != "" {
+		return got
 	}
-	if baseUrl := os.Getenv("BASE_URL"); baseUrl != "" {
-		defBaseUrl = baseUrl
-	}
-	if storagePath := os.Getenv("STORAGE_PATH"); storagePath != "" {
-		defStoragePath = storagePath
-	}
+	return def
+}
 
-	flag.StringVar(&config.ServerAddress, "a", defServAddr, "address for http-server")
-	flag.StringVar(&config.BaseUrl, "p", defBaseUrl, "user-input value for pre short url")
-	flag.StringVar(&config.StoragePath, "f", defStoragePath, "full path to the storage")
+func init() {
+	serverAddress := checkenv("SERVER_ADDRESS", defServAddr)
+	baseUrl := checkenv("BASE_URL", defBaseUrl)
+	storagePath := checkenv("STORAGE_PATH", defStoragePath)
+	dataBase := checkenv("DATABASE_DSN", defDataBase)
+
+	flag.StringVar(&config.ServerAddress, "a", serverAddress, "address for http-server")
+	flag.StringVar(&config.BaseUrl, "p", baseUrl, "user-input value for pre short url")
+	flag.StringVar(&config.StoragePath, "f", storagePath, "full path to the storage")
+	flag.StringVar(&config.DataBase, "d", dataBase, "config for connecting to database")
 	flag.BoolVar(&config.Same, "s", false, "are base url and server address same")
 
 	if !isTestRun() {

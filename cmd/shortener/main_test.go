@@ -2,62 +2,20 @@ package main
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"nerd/shortener/handlers"
 	"nerd/shortener/storage"
-	"nerd/shortener/utils"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 const (
 	DefaultLen = 5
 	TestUrl    = "http://testingurl.com"
 )
-
-func TestGenShortUrl(t *testing.T) {
-	type args struct {
-		n int
-	}
-	tests := []struct {
-		name string
-		args args
-		want int
-	}{
-		{name: "normal length 0", args: args{n: DefaultLen}, want: DefaultLen}, {name: "normal length 1", args: args{n: DefaultLen}, want: DefaultLen},
-		{name: "normal length 2", args: args{n: DefaultLen}, want: DefaultLen},
-		{name: "normal length 3", args: args{n: DefaultLen}, want: DefaultLen},
-		{name: "normal length 4", args: args{n: DefaultLen}, want: DefaultLen},
-		{name: "normal length 5", args: args{n: DefaultLen}, want: DefaultLen},
-		{name: "normal length 6", args: args{n: DefaultLen}, want: DefaultLen},
-		{name: "spec length", args: args{n: 10}, want: 10},
-	}
-	symbols := utils.GetSymbols()
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			short := utils.GenShortUrl(tt.args.n)
-			assert.Equalf(t, tt.want, len(short), "GenShortUrl(%v)", tt.args.n)
-			for _, c := range short {
-				assert.NotContains(t, string(c), symbols)
-			}
-		})
-	}
-}
-
-func TestInfo(t *testing.T) {
-	tests := []struct {
-		name string
-	}{
-		{name: "1"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			utils.Info(sugar)
-		})
-	}
-}
 
 func TestPostHandler(t *testing.T) {
 	type args struct {

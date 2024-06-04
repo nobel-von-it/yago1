@@ -1,9 +1,12 @@
 package handlers
 
 import (
+	"database/sql"
 	"fmt"
 	"net/http"
 	"strings"
+
+	_ "github.com/lib/pq"
 )
 
 const form = `<html>
@@ -56,4 +59,18 @@ func GetAllHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+func GetPing(w http.ResponseWriter, r *http.Request) {
+	db, err := sql.Open("postgres", config.DataBase)
+	if err != nil {
+		w.Header().Set("content-type", "text/plain")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("error to connect database"))
+	} else {
+		w.Header().Set("content-type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("connect database success"))
+	}
+	defer db.Close()
 }
